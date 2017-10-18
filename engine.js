@@ -91,10 +91,16 @@ class Piece {
 		this.state = IDLE;
 		this.actions = [];
 		game.actionLayer.removeChildren();
+		this.sprite.x = this.x;
+		this.sprite.y = this.y;
 	}
 	select() {
 		this.state = SELECTED;
 		this.filters = [shadowFilter];
+		this.x = this.sprite.x;
+		this.y = this.sprite.y;
+		this.sprite.x = this.x - 1;
+		this.sprite.y = this.y - 2;
 		this.refreshActions([]);
 	}
 
@@ -111,6 +117,7 @@ class Piece {
 		game.actionLayer.removeChildren();
 		let possibles = this.getPossibleActions(this.actions);
 		for (let a of possibles) {
+			a.initDisplay();
 			game.actionLayer.addChild(a.display);
 		}
 	}
@@ -150,6 +157,7 @@ class Pawn extends Piece {
 				if (targetPiece && targetPiece.player !== this.player) {
 					action.victims.push(targetPiece);
 				}
+				actions.push(action);
 			}
 		}
 
@@ -159,11 +167,11 @@ class Pawn extends Piece {
 			let diagonal2 = add(coord, dx * 2, dy * 2);
 			if (diagonal1 && game.board[diagonal1] && diagonal2) {
 				let targetPiece = game.board[diagonal2];
-				if (!targetPiece) {
-					actions.push(new VaultToAction(this, diagonal2));
-				} else if (targetPiece.player !== this.player) {
-					actions.push(new VaultToAndKillAction(this, diagonal2, targetPiece));
+				let action = new VaultToAction(this, diagonal2);
+				if (targetPiece && targetPiece.player !== this.player) {
+					action.victims.push(targetPiece);
 				}
+				actions.push(action);
 			}
 		}
 
@@ -201,23 +209,37 @@ class King extends Piece {
 	}
 }
 
+function addPiece(player, clazz, coord) {
+	if (!add(coord, 0, 0)) {
+		return;
+	}
+	if (game.board[coord]) {
+		removePiece(coord);
+	}
+	game.board[coord] = game.initPiece(player, clazz);
+	game.initPieceGraphic(game.board[coord]);
+}
+
+function removePiece(coord) {
+
+}
+
 class Action {
 	constructor(piece, coord) {
 		this.piece = piece;
 		this.coord = coord;
-		this.initDisplay();
 		this.victims = [];
 	}
-	
+
 	get final() { return true; }
-	
+
 	initDisplay() {
 		this.display = new PIXI.Container();
 		let source = game.coordToPosition(game.coordFromPiece(this.piece));
 		let destination = game.coordToPosition(this.coord);
 		let offset = CELL_SIZE / 2;
 		let g = new PIXI.Graphics();
-		g.lineStyle(4, this.victims.length ? 0xFF0000 : 0x00FF00, 0.8);
+		g.lineStyle(4, this.victims.length ? 0xFF0000 : (this.final ? 0x00FF00 : 0x0000FF), 0.8);
 		g.moveTo(source.x + offset, source.y + offset);
 		g.lineTo(destination.x + offset, destination.y + offset);
 		g.drawCircle(destination.x + offset, destination.y + offset, offset);
@@ -230,17 +252,13 @@ class Action {
 }
 
 class ConfirmAction extends Action {
-}
-class GotoAction extends Action {
 	initDisplay() {
 		this.display = new PIXI.Container();
-		let source = game.coordToPosition(game.coordFromPiece(this.piece));
 		let destination = game.coordToPosition(this.coord);
 		let offset = CELL_SIZE / 2;
 		let g = new PIXI.Graphics();
-		g.lineStyle(4, 0x00FF00, 0.8);
-		g.moveTo(source.x + offset, source.y + offset);
-		g.lineTo(destination.x + offset, destination.y + offset);
+		g.lineStyle(4, this.victims.length ? 0xFF0000 : (this.final ? 0x00FF00 : 0x0000FF), 0.8);
+		g.drawCircle(destination.x + offset, destination.y + offset, offset);
 		this.display.addChild(g);
 		this.display.hitArea = new PIXI.Rectangle(destination.x, destination.y, CELL_SIZE, CELL_SIZE);
 		this.display.interactive = true;
@@ -248,8 +266,10 @@ class GotoAction extends Action {
 		this.display.action = this;
 	}
 }
+class GotoAction extends Action {
+}
 class VaultToAction extends Action {
-	get final() { return false; }
+	get final() { return this.victims.length; }
 }
 
 function chooseAction() {
@@ -329,16 +349,18 @@ class Game {
 		this.actionLayer.scale.copy(this.grid.scale);
 		this.layer.addChild(this.actionLayer);
 	}
-
+	initPieceGraphic(piece) {
+		this.pieceLayer.addChild(piece.sprite);
+		piece.sprite.width = CELL_SIZE;
+		piece.sprite.height = CELL_SIZE;
+		let coord = this.coordFromPiece(piece);
+		piece.sprite.position.copy(this.coordToPosition(coord));
+	}
 	initPieceGraphics() {
 		let pieceLayer = this.pieceLayer = new PIXI.Container();
 
 		for (let piece of this.pieces) {
-			pieceLayer.addChild(piece.sprite);
-			piece.sprite.width = CELL_SIZE;
-			piece.sprite.height = CELL_SIZE;
-			let coord = this.coordFromPiece(piece);
-			piece.sprite.position.copy(this.coordToPosition(coord));
+			this.initPieceGraphic(piece);
 		}
 		this.layer.addChild(pieceLayer);
 		pieceLayer.position.copy(this.grid);
@@ -450,3 +472,10 @@ function mouseUpCell() {
 
 function mouseUpOutsideCell() {
 }
+
+//debug
+addPiece(1, Castle, 'd4')
+
+addPiece(1, Castle, 'e5')
+
+addPiece(1, Castle, 'c3')
