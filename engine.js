@@ -107,7 +107,7 @@ class Piece {
 	nextAction(action) {
 		this.actions.push(action);
 		if (action.final) {
-
+			game.applyActions(this.actions);
 		} else {
 			this.refreshActions();
 		}
@@ -167,7 +167,7 @@ class Pawn extends Piece {
 			let diagonal2 = add(coord, dx * 2, dy * 2);
 			if (diagonal1 && game.board[diagonal1] && diagonal2) {
 				let targetPiece = game.board[diagonal2];
-				let action = new VaultToAction(this, diagonal2);
+				let action = new VaultToAction(this, coord, diagonal2);
 				if (targetPiece && targetPiece.player !== this.player) {
 					action.victims.push(targetPiece);
 				}
@@ -213,15 +213,17 @@ function addPiece(player, clazz, coord) {
 	if (!add(coord, 0, 0)) {
 		return;
 	}
-	if (game.board[coord]) {
-		removePiece(coord);
+	let piece = game.board[coord];
+	if (piece) {
+		removePiece(piece);
 	}
 	game.board[coord] = game.initPiece(player, clazz);
 	game.initPieceGraphic(game.board[coord]);
 }
 
-function removePiece(coord) {
-
+function removePiece(piece) {
+	game.pieces = game.pieces.filter((v) => v !== piece);
+	game.pieceLayer.removeChild(piece.sprite);
 }
 
 class Action {
@@ -229,14 +231,33 @@ class Action {
 		this.piece = piece;
 		this.coord = coord;
 		this.victims = [];
+		this.fromCoord = game.coordFromPiece(piece);
+		this.source = game.coordToPosition(this.fromCoord);
+		this.destination = game.coordToPosition(this.coord);
+	}
+
+	animate(progress) {
+		let p = progress / this.animationLength;
+		this.piece.sprite.x = lerp(this.source.x, this.destination.x, p);
+		this.piece.sprite.y = lerp(this.source.y, this.destination.y, p);
+	}
+
+	apply() {
+		game.board[this.fromCoord] = null;
+		game.board[this.coord] = this.piece;
+		this.piece.sprite.position.copy(this.destination);
+		for (let victim of this.victims) {
+			removePiece(victim);
+		}
 	}
 
 	get final() { return true; }
+	get animationLength() { return 300; }
 
 	initDisplay() {
 		this.display = new PIXI.Container();
-		let source = game.coordToPosition(game.coordFromPiece(this.piece));
-		let destination = game.coordToPosition(this.coord);
+		let source = this.source;
+		let destination = this.destination;
 		let offset = CELL_SIZE / 2;
 		let g = new PIXI.Graphics();
 		g.lineStyle(4, this.victims.length ? 0xFF0000 : (this.final ? 0x00FF00 : 0x0000FF), 0.8);
@@ -252,6 +273,7 @@ class Action {
 }
 
 class ConfirmAction extends Action {
+	get animationLength() { return 0; }
 	initDisplay() {
 		this.display = new PIXI.Container();
 		let destination = game.coordToPosition(this.coord);
@@ -269,6 +291,11 @@ class ConfirmAction extends Action {
 class GotoAction extends Action {
 }
 class VaultToAction extends Action {
+	constructor(piece, from, to) {
+		super(piece, to);
+		this.fromCoord = from;
+		this.source = game.coordToPosition(this.fromCoord);
+	}
 	get final() { return this.victims.length; }
 }
 
@@ -290,6 +317,11 @@ function add(coord, dx, dy) {
 }
 
 class Game {
+	constructor() {
+		this.initBoard();
+		this.initGraphics();
+	}
+
 	initPiece(player, clazz) {
 		let piece = new clazz(player);
 		this.pieces.push(piece);
@@ -395,29 +427,63 @@ class Game {
 
 		app.stage.hitArea = new PIXI.Rectangle(0, 0, app.screen.width, app.screen.height);
 		app.stage.interactive = true;
-		app.stage.rightdown = function () {
-			if (selected) {
-				selected.deselect();
-				selected = null;
-				if (inside) {
-					inside.mouseover();
-				}
-			}
-		};
+		app.stage.rightdown = clearSelection;
 
 		this.grid = grid;
 	}
 
-	constructor() {
-		this.initBoard();
-		this.initGraphics();
+
+	applyActions(actions) {
+		this.phase = PHASE.ANIMATE;
+		this.actionIndex = 0;
+		this.progress = 0;
+		this.actions = actions;
+		clearSelection();
 	}
 }
 
-game = new Game();
+function clearSelection() {
+	if (selected) {
+		selected.deselect();
+		selected = null;
+		//TODO: this isnt mvc
+		if (inside) {
+			inside.mouseover();
+		}
+	}
+}
+
+var game = new Game();
 app.stage.addChild(game.layer);
+var time = Date.now();
 
 function animate() {
+	let delta = Date.now() - time;
+	time = Date.now();
+	//TODO: this is a wtf mess
+	if (game.phase == PHASE.ANIMATE) {
+		game.progress += delta;
+
+		let action = game.actions[game.actionIndex];
+		if (action.animationLength <= game.progress) {
+			action.apply();
+			game.actionIndex++;
+			game.progress = 0;
+			if (game.actionIndex >= game.actions.length) {
+				game.phase = PHASE.PLAY;
+				game.turn ^= 1;
+				if (inside) {
+					inside.mouseover();
+				}
+			} else {
+				game.actions[game.actionIndex].animate(game.progress);
+			}
+		} else {
+			action.animate(game.progress);
+		}
+
+	}
+
 	app.render();
 	requestAnimationFrame(animate);
 }
@@ -429,6 +495,10 @@ document.getElementById("canvasZone").appendChild(app.view);
  */
 function unlerp(a, b, v) {
 	return (v - a) / (b - a);
+}
+
+function lerp(a, b, u) {
+	return a + (b - a) * u;
 }
 
 
