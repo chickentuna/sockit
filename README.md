@@ -1,2 +1,2 @@
 # sockit
-A test project for Node.js + Socket.io used for a gaming server
+A test project for a strange ruleset of chess
