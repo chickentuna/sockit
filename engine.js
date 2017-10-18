@@ -207,7 +207,24 @@ class Action {
 		this.coord = coord;
 		this.initDisplay();
 	}
+	
 	get final() { return true; }
+	
+	initDisplay() {
+		this.display = new PIXI.Container();
+		let source = game.coordToPosition(game.coordFromPiece(this.piece));
+		let destination = game.coordToPosition(this.coord);
+		let offset = CELL_SIZE / 2;
+		let g = new PIXI.Graphics();
+		g.lineStyle(4, 0x00FF00, 0.8);
+		g.moveTo(source.x + offset, source.y + offset);
+		g.lineTo(destination.x + offset, destination.y + offset);
+		this.display.addChild(g);
+		this.display.hitArea = new PIXI.Rectangle(destination.x, destination.y, CELL_SIZE, CELL_SIZE);
+		this.display.interactive = true;
+		this.display.mousedown = chooseAction;
+		this.display.action = this;
+	}
 }
 
 class ConfirmAction extends Action {
