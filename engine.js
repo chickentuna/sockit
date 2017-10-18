@@ -77,6 +77,7 @@ class Piece {
 		this.type = type;
 		this.player = player;
 		this.sprite = new PIXI.Sprite(PIECES[player][type]);
+		this.actions = [];
 	}
 	toString() {
 		return ['white', 'black'][this.player] + ' ' + ['PAWN', 'BISHOP', 'KNIGHT', 'CASTLE', 'QUEEN', 'KING'][this.type].toLowerCase();
@@ -88,10 +89,29 @@ class Piece {
 	deselect() {
 		this.filters = [];
 		this.state = IDLE;
+		this.actions = [];
+		game.actionLayer.removeChildren();
 	}
 	select() {
 		this.state = SELECTED;
 		this.filters = [shadowFilter];
+		this.refreshActions([]);
+	}
+
+	nextAction(action) {
+		this.actions.push(action);
+		if (action.final) {
+			
+		} else {
+			this.refreshActions();
+		}
+	}
+
+	refreshActions() {
+		let possibles = this.getPossibleActions(this.actions);
+		for (let a of possibles) {
+			game.actionLayer.addChild(a.display);
+		}
 	}
 
 	over() {
@@ -104,11 +124,146 @@ class Piece {
 		this.filters = [];
 		this.state = IDLE;
 	}
+
+	getPossibleActions() {
+		return [];
+	}
+}
+
+class Pawn extends Piece {
+	constructor(player) {
+		super(player, PAWN);
+	}
+
+	getPossibleActions(previousActions) {
+		let actions = [];
+		let dy = this.player === 0 ? 1 : -1;
+		let coord = (previousActions.length) ? previousActions[0].coord : game.coordFromPiece(this);
+
+		// Advance
+		if (previousActions.length === 0) {
+			let front = add(coord, 0, dy);
+			if (front) {
+				let targetPiece = game.board[front];
+				if (!targetPiece) {
+					actions.push(new GotoAction(this, front));
+				} else if (targetPiece.player !== this.player) {
+					actions.push(new GotoAndKillAction(this, front, targetPiece));
+				}
+			}
+		}
+
+		// Vault
+		for (let dx = -1; dx <= 1; dx += 2) {
+			let diagonal1 = add(coord, dx, dy);
+			let diagonal2 = add(coord, dx * 2, dy * 2);
+			if (diagonal1 && game.board[diagonal1] && diagonal2) {
+				let targetPiece = game.board[diagonal2];
+				if (!targetPiece) {
+					actions.push(new VaultToAction(this, diagonal2));
+				} else if (targetPiece.player !== this.player) {
+					actions.push(new VaultToAndKillAction(this, diagonal2, targetPiece));
+				}
+			}
+		}
+
+		//Confirm
+		if (previousActions.length) {
+			actions.push(new ConfirmAction(this, coord));
+		}
+		return actions;
+	}
+
+}
+class Bishop extends Piece {
+	constructor(player) {
+		super(player, BISHOP);
+	}
+}
+class Knight extends Piece {
+	constructor(player) {
+		super(player, KNIGHT);
+	}
+}
+class Castle extends Piece {
+	constructor(player) {
+		super(player, CASTLE);
+	}
+}
+class Queen extends Piece {
+	constructor(player) {
+		super(player, QUEEN);
+	}
+}
+class King extends Piece {
+	constructor(player) {
+		super(player, KING);
+	}
+}
+
+class Action {
+	constructor(piece, coord) {
+		this.piece = piece;
+		this.coord = coord;
+		this.initDisplay();
+	}
+	get final() { return true; }
+}
+
+class ConfirmAction extends Action {
+}
+class GotoAction extends Action {
+	initDisplay() {
+		this.display = new PIXI.Container();
+		let source = game.coordToPosition(game.coordFromPiece(this.piece));
+		let destination = game.coordToPosition(this.coord);
+		let offset = CELL_SIZE / 2;
+		let g = new PIXI.Graphics();
+		g.lineStyle(4, 0x00FF00, 0.8);
+		g.moveTo(source.x + offset, source.y + offset);
+		g.lineTo(destination.x + offset, destination.y + offset);
+		this.display.addChild(g);
+		this.display.hitArea = new PIXI.Rectangle(source.x, source.y, CELL_SIZE, CELL_SIZE);
+		this.interactive = true;
+		this.display.mousedown = chooseAction();
+	}
+}
+class GotoAndKillAction extends GotoAction {
+	constructor(piece, coord, victim) {
+		super(piece, coord);
+		this.victim = victim;
+	}
+}
+class VaultToAction extends Action {
+	get final() { return false; }
+}
+class VaultToAndKillAction extends VaultToAction {
+	constructor(piece, coord, victim) {
+		super(piece, coord);
+		this.victim = victim;
+	}
+}
+
+function chooseAction() {
+	selected.nextAction(this);
+}
+
+function add(coord, dx, dy) {
+	let col = coord[0];
+	let row = coord[1];
+	let x = ALPHA.indexOf(col) + dx;
+	let y = row - 1 + dy;
+
+	if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
+		return null;
+	}
+
+	return ALPHA[x] + (y + 1);
 }
 
 class Game {
-	initPiece(player, type) {
-		let piece = new Piece(player, type);
+	initPiece(player, clazz) {
+		let piece = new clazz(player);
 		this.pieces.push(piece);
 		return piece;
 	}
@@ -133,19 +288,19 @@ class Game {
 
 		for (let i = 0; i < 2; ++i) {
 			let row = [1, 8][i];
-			this.board['a' + row] = this.initPiece(i, CASTLE);
-			this.board['b' + row] = this.initPiece(i, KNIGHT);
-			this.board['c' + row] = this.initPiece(i, BISHOP);
-			this.board['d' + row] = this.initPiece(i, QUEEN);
-			this.board['e' + row] = this.initPiece(i, KING);
-			this.board['f' + row] = this.initPiece(i, BISHOP);
-			this.board['g' + row] = this.initPiece(i, KNIGHT);
-			this.board['h' + row] = this.initPiece(i, CASTLE);
+			this.board['a' + row] = this.initPiece(i, Castle);
+			this.board['b' + row] = this.initPiece(i, Knight);
+			this.board['c' + row] = this.initPiece(i, Bishop);
+			this.board['d' + row] = this.initPiece(i, Queen);
+			this.board['e' + row] = this.initPiece(i, King);
+			this.board['f' + row] = this.initPiece(i, Bishop);
+			this.board['g' + row] = this.initPiece(i, Knight);
+			this.board['h' + row] = this.initPiece(i, Castle);
 		}
 		for (let i = 0; i < 2; ++i) {
 			let row = [2, 7][i];
 			for (let col of ALPHA) {
-				this.board[col + row] = this.initPiece(i, PAWN);
+				this.board[col + row] = this.initPiece(i, Pawn);
 			}
 		}
 
@@ -157,6 +312,14 @@ class Game {
 		this.layer = new PIXI.Container();
 		this.initGridGraphics();
 		this.initPieceGraphics();
+		this.initActionLayer();
+	}
+
+	initActionLayer() {
+		this.actionLayer = new PIXI.Container();
+		this.actionLayer.position.copy(this.grid);
+		this.actionLayer.scale.copy(this.grid.scale);
+		this.layer.addChild(this.actionLayer);
 	}
 
 	initPieceGraphics() {
@@ -202,7 +365,7 @@ class Game {
 
 		app.stage.hitArea = new PIXI.Rectangle(0, 0, app.screen.width, app.screen.height);
 		app.stage.interactive = true;
-		app.stage.rightdown = function() {
+		app.stage.rightdown = function () {
 			if (selected) {
 				selected.deselect();
 				selected = null;
@@ -249,7 +412,7 @@ var inside = null;
 function mouseOverCell() {
 	let piece = game.board[this.coord];
 	inside = this;
-	
+
 	if (!selected && piece && piece.state === IDLE && game.phase === PHASE.PLAY && game.turn === piece.player) {
 		piece.over();
 	}
@@ -257,7 +420,7 @@ function mouseOverCell() {
 
 function mouseOutCell() {
 	let piece = game.board[this.coord];
-	if (inside === this)  {
+	if (inside === this) {
 		inside = null;
 	}
 	if (!selected && piece && piece.state === GLOWING) {
@@ -268,8 +431,8 @@ function mouseOutCell() {
 function mouseDownCell() {
 	let piece = game.board[this.coord];
 	if (!selected && piece && piece.state === GLOWING) {
-		piece.select();
 		selected = piece;
+		piece.select();
 	}
 }
 
