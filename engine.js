@@ -101,7 +101,7 @@ class Piece {
 	nextAction(action) {
 		this.actions.push(action);
 		if (action.final) {
-			
+
 		} else {
 			this.refreshActions();
 		}
@@ -223,9 +223,10 @@ class GotoAction extends Action {
 		g.moveTo(source.x + offset, source.y + offset);
 		g.lineTo(destination.x + offset, destination.y + offset);
 		this.display.addChild(g);
-		this.display.hitArea = new PIXI.Rectangle(source.x, source.y, CELL_SIZE, CELL_SIZE);
-		this.interactive = true;
-		this.display.mousedown = chooseAction();
+		this.display.hitArea = new PIXI.Rectangle(destination.x, destination.y, CELL_SIZE, CELL_SIZE);
+		this.display.interactive = true;
+		this.display.mousedown = chooseAction;
+		this.display.action = this;
 	}
 }
 class GotoAndKillAction extends GotoAction {
@@ -245,7 +246,7 @@ class VaultToAndKillAction extends VaultToAction {
 }
 
 function chooseAction() {
-	selected.nextAction(this);
+	selected.nextAction(this.action);
 }
 
 function add(coord, dx, dy) {
