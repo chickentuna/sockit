@@ -108,6 +108,7 @@ class Piece {
 	}
 
 	refreshActions() {
+		game.actionLayer.removeChildren();
 		let possibles = this.getPossibleActions(this.actions);
 		for (let a of possibles) {
 			game.actionLayer.addChild(a.display);
@@ -138,17 +139,16 @@ class Pawn extends Piece {
 	getPossibleActions(previousActions) {
 		let actions = [];
 		let dy = this.player === 0 ? 1 : -1;
-		let coord = (previousActions.length) ? previousActions[0].coord : game.coordFromPiece(this);
+		let coord = (previousActions.length) ? previousActions[previousActions.length - 1].coord : game.coordFromPiece(this);
 
 		// Advance
 		if (previousActions.length === 0) {
 			let front = add(coord, 0, dy);
 			if (front) {
 				let targetPiece = game.board[front];
-				if (!targetPiece) {
-					actions.push(new GotoAction(this, front));
-				} else if (targetPiece.player !== this.player) {
-					actions.push(new GotoAndKillAction(this, front, targetPiece));
+				let action = new GotoAction(this, front);
+				if (targetPiece && targetPiece.player !== this.player) {
+					action.victims.push(targetPiece);
 				}
 			}
 		}
@@ -206,6 +206,7 @@ class Action {
 		this.piece = piece;
 		this.coord = coord;
 		this.initDisplay();
+		this.victims = [];
 	}
 	
 	get final() { return true; }
@@ -216,9 +217,10 @@ class Action {
 		let destination = game.coordToPosition(this.coord);
 		let offset = CELL_SIZE / 2;
 		let g = new PIXI.Graphics();
-		g.lineStyle(4, 0x00FF00, 0.8);
+		g.lineStyle(4, this.victims.length ? 0xFF0000 : 0x00FF00, 0.8);
 		g.moveTo(source.x + offset, source.y + offset);
 		g.lineTo(destination.x + offset, destination.y + offset);
+		g.drawCircle(destination.x + offset, destination.y + offset, offset);
 		this.display.addChild(g);
 		this.display.hitArea = new PIXI.Rectangle(destination.x, destination.y, CELL_SIZE, CELL_SIZE);
 		this.display.interactive = true;
@@ -246,20 +248,8 @@ class GotoAction extends Action {
 		this.display.action = this;
 	}
 }
-class GotoAndKillAction extends GotoAction {
-	constructor(piece, coord, victim) {
-		super(piece, coord);
-		this.victim = victim;
-	}
-}
 class VaultToAction extends Action {
 	get final() { return false; }
-}
-class VaultToAndKillAction extends VaultToAction {
-	constructor(piece, coord, victim) {
-		super(piece, coord);
-		this.victim = victim;
-	}
 }
 
 function chooseAction() {
