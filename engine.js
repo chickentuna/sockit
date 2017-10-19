@@ -189,6 +189,38 @@ class Pawn extends Piece {
 
 }
 class Bishop extends Piece {
+	getPossibleActions(previousActions) {
+		let actions = [];
+		let coord = game.coordFromPiece(this);
+		for (let dx = -1; dx <= 1; dx += 2) {
+			for (let dy = -1; dy <= 1; dy += 2) {
+				let distance = 1;
+				let currentCoord = add(coord, dx, dy);
+				while (currentCoord) {
+					let targetPiece = game.board[currentCoord];
+					if (targetPiece) {
+						if (distance === 1 && targetPiece.player !== this.player) {
+							//Kill
+							let a = new GotoAction(this, currentCoord);
+							a.victims.push(targetPiece);
+							actions.push(a);
+						} else {
+							//Switch
+							actions.push(new SwitchAction(this, targetPiece));
+						}
+
+						break;
+					} else {
+						//Goto
+						actions.push(new GotoAction(this, currentCoord));
+					}
+					currentCoord = add(currentCoord, dx, dy);
+					distance++;
+				}
+			}
+		}
+		return actions;
+	}
 	constructor(player) {
 		super(player, BISHOP);
 	}
@@ -294,6 +326,24 @@ class ConfirmAction extends Action {
 	}
 }
 class GotoAction extends Action {
+}
+class SwitchAction extends Action {
+	constructor(piece, targetPiece) {
+		super(piece, game.coordFromPiece(targetPiece));
+		this.targetPiece = targetPiece;
+	}
+	apply() {
+		super.apply();
+		game.board[this.fromCoord] = this.targetPiece;
+		this.targetPiece.sprite.position.copy(this.source);
+	}
+	animate(progress) {
+		let p = progress / this.animationLength;
+		this.piece.sprite.x = lerp(this.source.x, this.destination.x, p);
+		this.piece.sprite.y = lerp(this.source.y, this.destination.y, p);
+		this.targetPiece.sprite.x = lerp(this.destination.x, this.source.x, p);
+		this.targetPiece.sprite.y = lerp(this.destination.y, this.source.y, p);
+	}
 }
 class VaultToAction extends Action {
 	constructor(piece, from, to) {
