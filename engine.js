@@ -266,15 +266,96 @@ class Castle extends Piece {
 	constructor(player) {
 		super(player, CASTLE);
 	}
+
+	getPossibleActions(previousActions) {
+		let actions = [];
+		let coord = game.coordFromPiece(this);
+		let dirs = [
+			{ x: 0, y: -1 },
+			{ x: 0, y: 1 },
+			{ x: -1, y: 0 },
+			{ x: 1, y: 0 },
+		];
+		for (let dir of dirs) {
+			let next = add(coord, dir.x, dir.y);
+			if (next) {
+				let target = game.board[next];
+				//TODO: rethink
+			}
+		}
+		return actions;
+	}
 }
 class Queen extends Piece {
 	constructor(player) {
 		super(player, QUEEN);
 	}
+
+	getPossibleActions(previousActions) {
+		let actions = [];
+		let coord = game.coordFromPiece(this);
+
+		//Spin attack
+		let around = [
+			{ x: 0, y: -1 },
+			{ x: 0, y: 1 },
+			{ x: -1, y: 0 },
+			{ x: 1, y: 0 },
+			{ x: 1, y: -1 },
+			{ x: 1, y: 1 },
+			{ x: -1, y: -1 },
+			{ x: -1, y: 1 }
+		];
+		let victims = [];
+		for (let dir of around) {
+			let target = add(coord, dir.x, dir.y);
+			if (target) {
+				let targetPiece = game.board[target];
+				if (targetPiece) {
+					victims.push(targetPiece);
+				}
+			}
+		}
+		if (victims.length) {
+			let action = new SpinAttackAction(this, coord);
+			action.victims = victims;
+			actions.push(action);
+		}
+
+		//Move to
+		for (let dir of around) {
+			let dx = dir.x, dy = dir.y;
+			let currentCoord = add(coord, dx, dy);
+			while (currentCoord) {
+				let targetPiece = game.board[currentCoord];
+				if (targetPiece) {
+					if (targetPiece.player !== this.player) {
+						//Kill
+						let a = new GotoAction(this, currentCoord);
+						a.victims.push(targetPiece);
+						actions.push(a);
+					}
+					break;
+				} else {
+					//Goto
+					actions.push(new GotoAction(this, currentCoord));
+				}
+				currentCoord = add(currentCoord, dx, dy);
+
+			}
+		}
+
+		return actions;
+	}
 }
 class King extends Piece {
 	constructor(player) {
 		super(player, KING);
+	}
+	getPossibleActions(previousActions) {
+		let actions = [];
+		let coord = game.coordFromPiece(this);
+		return actions;
 	}
 }
 
@@ -291,8 +372,13 @@ function addPiece(player, clazz, coord) {
 }
 
 function removePiece(piece) {
+	let coord = game.coordFromPiece(piece);
+	if (coord) {
+		game.board[coord] = null;
+	}
 	game.pieces = game.pieces.filter((v) => v !== piece);
 	game.pieceLayer.removeChild(piece.sprite);
+
 }
 
 class Action {
@@ -336,8 +422,28 @@ class Action {
 		this.display.addChild(g);
 		this.display.hitArea = new PIXI.Rectangle(destination.x, destination.y, CELL_SIZE, CELL_SIZE);
 		this.display.interactive = true;
-		this.display.mousedown = chooseAction;
+		this.display.touchstart = this.display.mousedown = chooseAction;
 		this.display.action = this;
+	}
+}
+
+class SpinAttackAction extends Action {
+	constructor(piece, coord) {
+		super(piece, coord);
+	}
+
+	animate(progress) {
+		let p = progress / this.animationLength;
+		this.piece.sprite.pivot.set(CELL_SIZE);
+		this.piece.sprite.x = this.source.x + CELL_SIZE / 2;
+		this.piece.sprite.y = this.source.y + CELL_SIZE / 2;
+		this.piece.sprite.rotation = p * Math.PI * 2;
+	}
+
+	apply() {
+		super.apply();
+		this.piece.sprite.rotation = 0;
+		this.piece.sprite.pivot.set(0);
 	}
 }
 
@@ -487,6 +593,7 @@ class Game {
 				return key;
 			}
 		}
+		return null;
 	}
 
 	initBoard() {
@@ -498,8 +605,8 @@ class Game {
 			this.board['a' + row] = this.initPiece(i, Castle);
 			this.board['b' + row] = this.initPiece(i, Knight);
 			this.board['c' + row] = this.initPiece(i, Bishop);
-			this.board['d' + row] = this.initPiece(i, Queen);
-			this.board['e' + row] = this.initPiece(i, King);
+			this.board['d' + row] = this.initPiece(i, King);
+			this.board['e' + row] = this.initPiece(i, Queen);
 			this.board['f' + row] = this.initPiece(i, Bishop);
 			this.board['g' + row] = this.initPiece(i, Knight);
 			this.board['h' + row] = this.initPiece(i, Castle);
@@ -558,11 +665,10 @@ class Game {
 				cell.tint = (i + k) % 2 === 0 ? COLOR_LIGHT : COLOR_DARK;
 				grid.addChild(cell);
 				cell.interactive = true;
-				cell.mouseover = mouseOverCell;
-				cell.mouseout = mouseOutCell;
-				cell.mousedown = mouseDownCell;
-				cell.mouseup = mouseUpCell;
-				cell.mouseupoutside = mouseUpOutsideCell;
+				cell.touchstart = cell.mouseover = mouseOverCell;
+				cell.touchendoutside = cell.mouseout = mouseOutCell;
+				cell.touchend = cell.mousedown = mouseDownCell;
+
 				cell.coord = ALPHA[i] + (k + 1);
 			}
 		}
@@ -679,13 +785,6 @@ function mouseDownCell() {
 		selected = piece;
 		piece.select();
 	}
-}
-
-function mouseUpCell() {
-
-}
-
-function mouseUpOutsideCell() {
 }
 
 //debug
