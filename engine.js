@@ -225,10 +225,42 @@ class Bishop extends Piece {
 		super(player, BISHOP);
 	}
 }
+
 class Knight extends Piece {
 	constructor(player) {
 		super(player, KNIGHT);
 	}
+
+	getPossibleActions(previousActions) {
+		let actions = [];
+		let coord = game.coordFromPiece(this);
+		let targets = [
+			add(coord, 2, -1),
+			add(coord, 2, 1),
+			add(coord, -1, 2),
+			add(coord, 1, 2),
+			add(coord, -2, -1),
+			add(coord, -2, 1),
+			add(coord, -1, -2),
+			add(coord, 1, -2)
+		];
+		for (let target of targets) {
+			if (target) {
+				let targetPiece = game.board[target];
+				if (targetPiece && targetPiece.player != this.player) {
+					let action = new SmashToAction(this, target);
+					actions.push(action);
+					action.victims.push(targetPiece);
+				} else if (!targetPiece) {
+					actions.push(new SmashToAction(this, target));
+				}
+			}
+		}
+
+
+		return actions;
+	}
+
 }
 class Castle extends Piece {
 	constructor(player) {
@@ -326,6 +358,66 @@ class ConfirmAction extends Action {
 	}
 }
 class GotoAction extends Action {
+}
+class SmashToAction extends Action {
+	constructor(piece, coord) {
+		super(piece, coord);
+		this.pushes = [];
+		let push = [
+			{ x: 0, y: -1 },
+			{ x: 0, y: 1 },
+			{ x: -1, y: 0 },
+			{ x: 1, y: 0 },
+			{ x: 1, y: -1 },
+			{ x: 1, y: 1 },
+			{ x: -1, y: -1 },
+			{ x: -1, y: 1 }
+		];
+		for (let dir of push) {
+			let target = add(this.coord, dir.x, dir.y);
+			if (target) {
+				let piece = game.board[target];
+				if (piece) {
+					let next = add(target, dir.x, dir.y);
+					if (next && !game.board[next]) {
+						this.pushes.push({ piece, from: target, to: next });
+					}
+				}
+			}
+		}
+	}
+	apply() {
+		super.apply();
+		for (let push of this.pushes) {
+			this.push(push.piece, push.from, push.to);
+		}
+	}
+	push(piece, from, to) {
+		game.board[from] = null;
+		game.board[to] = piece;
+		piece.sprite.position.copy(game.coordToPosition(to));
+	}
+
+	get animationLength() { return 600; }
+
+	animate(progress) {
+		let p = progress / this.animationLength;
+		if (p < 0.5) {
+			this.piece.sprite.x = lerp(this.source.x, this.destination.x, p * 2);
+			this.piece.sprite.y = lerp(this.source.y, this.destination.y, p * 2);
+		} else {
+			this.piece.sprite.x = this.destination.x;
+			this.piece.sprite.y = this.destination.y;
+		}
+		if (p >= 0.5) {
+			for (let pushed of this.pushes) {
+				let source = game.coordToPosition(pushed.from);
+				let destination = game.coordToPosition(pushed.to);
+				pushed.piece.sprite.x = lerp(source.x, destination.x, 2 * (p - 0.5));
+				pushed.piece.sprite.y = lerp(source.y, destination.y, 2 * (p - 0.5));
+			}
+		}
+	}
 }
 class SwitchAction extends Action {
 	constructor(piece, targetPiece) {
