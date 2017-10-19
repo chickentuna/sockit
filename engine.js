@@ -157,7 +157,9 @@ class Pawn extends Piece {
 				if (targetPiece && targetPiece.player !== this.player) {
 					action.victims.push(targetPiece);
 				}
-				actions.push(action);
+				if (!targetPiece || targetPiece.player !== this.player) {
+					actions.push(action);
+				}
 			}
 		}
 
@@ -171,7 +173,9 @@ class Pawn extends Piece {
 				if (targetPiece && targetPiece.player !== this.player) {
 					action.victims.push(targetPiece);
 				}
-				actions.push(action);
+				if (!targetPiece || targetPiece.player !== this.player) {
+					actions.push(action);
+				}
 			}
 		}
 
