@@ -276,13 +276,35 @@ class Castle extends Piece {
 			{ x: -1, y: 0 },
 			{ x: 1, y: 0 },
 		];
+
+		//Move to
 		for (let dir of dirs) {
-			let next = add(coord, dir.x, dir.y);
-			if (next) {
-				let target = game.board[next];
-				//TODO: rethink
+			let dx = dir.x, dy = dir.y;
+			let currentCoord = add(coord, dx, dy);
+			while (currentCoord) {
+				let targetPiece = game.board[currentCoord];
+				if (targetPiece) {
+					if (targetPiece.player !== this.player) {
+						//Kill
+						let a = new GotoAction(this, currentCoord);
+						a.victims.push(targetPiece);
+						actions.push(a);
+					} else {
+						let pushedTo = add(currentCoord, dx, dy);
+						if (pushedTo && !game.board[pushedTo]) {
+							actions.push(new ShoveAction(this, currentCoord,targetPiece, pushedTo));
+						}
+					}
+					break;
+				} else {
+					//Goto
+					actions.push(new GotoAction(this, currentCoord));
+				}
+				currentCoord = add(currentCoord, dx, dy);
+
 			}
 		}
+
 		return actions;
 	}
 }
@@ -425,6 +447,14 @@ class Action {
 		this.display.touchstart = this.display.mousedown = chooseAction;
 		this.display.action = this;
 	}
+
+	push(piece, from, to) {
+		if (game.board[from] === piece) {
+			game.board[from] = null;
+		}		
+		game.board[to] = piece;
+		piece.sprite.position.copy(game.coordToPosition(to));
+	}
 }
 
 class SpinAttackAction extends Action {
@@ -465,6 +495,29 @@ class ConfirmAction extends Action {
 }
 class GotoAction extends Action {
 }
+
+class ShoveAction extends Action {
+	constructor(piece, coord, shoved, to) {
+		super(piece, coord);
+		this.shoved = shoved;
+		this.shovedTo = to;
+		this.shoveDest = game.coordToPosition(to);
+	}
+	apply() {
+		super.apply();
+		this.push(this.shoved, this.coord, this.shovedTo);
+	}
+	
+	animate(progress) {
+		let p = progress / this.animationLength;
+		this.piece.sprite.x = lerp(this.source.x, this.destination.x, p);
+		this.piece.sprite.y = lerp(this.source.y, this.destination.y, p);
+		if (p >= 0.8) {
+			this.shoved.sprite.x = lerp(this.destination.x, this.shoveDest.x, (p-0.8)/0.2);
+			this.shoved.sprite.y = lerp(this.destination.y, this.shoveDest.y, (p-0.8)/0.2);
+		}
+	}
+}
 class SmashToAction extends Action {
 	constructor(piece, coord) {
 		super(piece, coord);
@@ -497,11 +550,6 @@ class SmashToAction extends Action {
 		for (let push of this.pushes) {
 			this.push(push.piece, push.from, push.to);
 		}
-	}
-	push(piece, from, to) {
-		game.board[from] = null;
-		game.board[to] = piece;
-		piece.sprite.position.copy(game.coordToPosition(to));
 	}
 
 	get animationLength() { return 600; }
