@@ -153,6 +153,7 @@ class Pawn extends Piece {
 			let front = add(coord, 0, dy);
 			if (front) {
 				let targetPiece = game.board[front];
+
 				let action = new GotoAction(this, front);
 				if (targetPiece && targetPiece.player !== this.player) {
 					action.victims.push(targetPiece);
@@ -467,25 +468,23 @@ function animate() {
 	//TODO: this is a wtf mess
 	if (game.phase == PHASE.ANIMATE) {
 		game.progress += delta;
-
 		let action = game.actions[game.actionIndex];
-		if (action.animationLength <= game.progress) {
+		if (game.progress >= action.animationLength) {
 			action.apply();
 			game.actionIndex++;
-			game.progress = 0;
-			if (game.actionIndex >= game.actions.length) {
-				game.phase = PHASE.PLAY;
-				game.turn ^= 1;
-				if (inside) {
-					inside.mouseover();
-				}
-			} else {
-				game.actions[game.actionIndex].animate(game.progress);
+			game.progress %= action.animationLength;
+		}
+		action = game.actions[game.actionIndex];
+
+		if (!action) {
+			game.phase = PHASE.PLAY;
+			game.turn ^= 1;
+			if (inside) {
+				inside.mouseover();
 			}
 		} else {
 			action.animate(game.progress);
 		}
-
 	}
 
 	app.render();
