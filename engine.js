@@ -834,10 +834,3 @@ function mouseDownCell() {
 		piece.select();
 	}
 }
-
-//debug
-addPiece(1, Castle, 'd4')
-
-addPiece(1, Castle, 'e5')
-
-addPiece(1, Castle, 'c3')
