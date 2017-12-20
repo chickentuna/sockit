@@ -1,2 +1,1 @@
-# sockit
-A test project for a strange ruleset of chess
+A Javascript parent project for experimenting game prototypes
