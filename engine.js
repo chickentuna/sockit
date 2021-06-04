@@ -292,7 +292,7 @@ class Castle extends Piece {
 					} else {
 						let pushedTo = add(currentCoord, dx, dy);
 						if (pushedTo && !game.board[pushedTo]) {
-							actions.push(new ShoveAction(this, currentCoord,targetPiece, pushedTo));
+							actions.push(new ShoveAction(this, currentCoord, targetPiece, pushedTo));
 						}
 					}
 					break;
@@ -377,6 +377,38 @@ class King extends Piece {
 	getPossibleActions(previousActions) {
 		let actions = [];
 		let coord = game.coordFromPiece(this);
+		let around = [
+			{ x: 0, y: -1 },
+			{ x: 0, y: 1 },
+			{ x: -1, y: 0 },
+			{ x: 1, y: 0 },
+			{ x: 1, y: -1 },
+			{ x: 1, y: 1 },
+			{ x: -1, y: -1 },
+			{ x: -1, y: 1 }
+		];
+		let victims = [];
+
+		//Move to
+		for (let dir of around) {
+			let dx = dir.x, dy = dir.y;
+			let currentCoord = add(coord, dx, dy);
+			if (currentCoord) {
+				let targetPiece = game.board[currentCoord];
+				if (targetPiece) {
+					if (targetPiece.player !== this.player) {
+						//Kill
+						let a = new LeadToAction(this, currentCoord, dx, dy);
+						a.victims.push(targetPiece);
+						actions.push(a);
+					}
+				} else {
+					//Lead to
+					actions.push(new LeadToAction(this, currentCoord, dx, dy));
+				}
+			}
+		}
+
 		return actions;
 	}
 }
@@ -451,7 +483,7 @@ class Action {
 	push(piece, from, to) {
 		if (game.board[from] === piece) {
 			game.board[from] = null;
-		}		
+		}
 		game.board[to] = piece;
 		piece.sprite.position.copy(game.coordToPosition(to));
 	}
@@ -468,12 +500,18 @@ class SpinAttackAction extends Action {
 		this.piece.sprite.x = this.source.x + CELL_SIZE / 2;
 		this.piece.sprite.y = this.source.y + CELL_SIZE / 2;
 		this.piece.sprite.rotation = p * Math.PI * 2;
+		for (let piece of this.victims) {
+			piece.sprite.alpha = 1 - p
+		}
 	}
 
 	apply() {
 		super.apply();
 		this.piece.sprite.rotation = 0;
 		this.piece.sprite.pivot.set(0);
+		for (let piece of this.victims) {
+			piece.sprite.alpha = 1
+		}
 	}
 }
 
@@ -507,17 +545,65 @@ class ShoveAction extends Action {
 		super.apply();
 		this.push(this.shoved, this.coord, this.shovedTo);
 	}
-	
+
 	animate(progress) {
 		let p = progress / this.animationLength;
 		this.piece.sprite.x = lerp(this.source.x, this.destination.x, p);
 		this.piece.sprite.y = lerp(this.source.y, this.destination.y, p);
 		if (p >= 0.8) {
-			this.shoved.sprite.x = lerp(this.destination.x, this.shoveDest.x, (p-0.8)/0.2);
-			this.shoved.sprite.y = lerp(this.destination.y, this.shoveDest.y, (p-0.8)/0.2);
+			this.shoved.sprite.x = lerp(this.destination.x, this.shoveDest.x, (p - 0.8) / 0.2);
+			this.shoved.sprite.y = lerp(this.destination.y, this.shoveDest.y, (p - 0.8) / 0.2);
 		}
 	}
 }
+
+class LeadToAction extends Action {
+	constructor(piece, coord, dx, dy) {
+		super(piece, coord);
+		this.dx = dx;
+		this.dy = dy;
+		let followers = game.pieces.filter(p => p.player === this.piece.player && this.piece != p)
+		let moved = true
+		let pushes = []
+		while (moved) {
+			moved = false
+			let nextFollowers = []
+			for (let piece of followers) {
+				let coord = game.coordFromPiece(piece)
+				let to = add(coord, this.dx, this.dy)
+				if (to && !game.board[to]) {
+					moved = true
+					pushes.push({ piece, to })
+				} else {
+					nextFollowers.push(piece)
+				}
+			}
+			followers = nextFollowers
+		}
+		this.pushes = pushes
+	}
+
+	apply() {
+		super.apply();
+		for (const { piece, to } of this.pushes) {
+			this.push(piece, game.coordFromPiece(piece), to)
+		}
+	}
+
+	animate(progress) {
+		let p = progress / this.animationLength;
+		this.piece.sprite.x = lerp(this.source.x, this.destination.x, p);
+		this.piece.sprite.y = lerp(this.source.y, this.destination.y, p);
+		for (const { piece, to } of this.pushes) {
+			let source = game.coordToPosition(game.coordFromPiece(piece))
+			let destination = game.coordToPosition(to)
+
+			piece.sprite.x = lerp(source.x, destination.x, p);
+			piece.sprite.y = lerp(source.y, destination.y, p);
+		}
+	}
+}
+
 class SmashToAction extends Action {
 	constructor(piece, coord) {
 		super(piece, coord);
